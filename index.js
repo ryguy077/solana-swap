@@ -136,7 +136,7 @@ async function distributeSol(fromKeypair, tempWallets, perWalletAmount, priority
 
   for (const walletData of tempWallets) {
     distribute(walletData);
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Kick off a new transaction every second
+    await new Promise(resolve => setTimeout(resolve, Math.random() * 400 + 1600)); // Kick off a new transaction with a 1.6s delay +/- 20%
   }
 }
 
@@ -172,11 +172,13 @@ async function swapTokens(tempWallets, toToken, priorityFee, totalAmount) {
       return;
     }
 
-    logMessage(`Swapping ${amountToSwap.toFixed(4)} SOL from wallet ${keypair.publicKey.toBase58()}...`);
+    const randomizedAmountToSwap = amountToSwap * (Math.random() * 0.4 + 0.8); // +/- 20% of amountToSwap
+
+    logMessage(`Swapping ${randomizedAmountToSwap.toFixed(4)} SOL from wallet ${keypair.publicKey.toBase58()}...`);
     const swapResponse = await solanaTracker.getSwapInstructions(
       'So11111111111111111111111111111111111111112',
       toToken,
-      amountToSwap,
+      randomizedAmountToSwap,
       30,
       keypair.publicKey.toBase58(),
       priorityFee
@@ -197,7 +199,7 @@ async function swapTokens(tempWallets, toToken, priorityFee, totalAmount) {
       logMessage(`Transaction URL: https://solscan.io/tx/${txid}`);
       await connection.confirmTransaction(txid, 'confirmed');
       logMessage(`Transaction confirmed: ${txid}`);
-      await new Promise(resolve => setTimeout(resolve, Math.random() * 2000 + 800));
+      await new Promise(resolve => setTimeout(resolve, Math.random() * 400 + 1600)); // Kick off a new transaction with a 1.6s delay +/- 20%
     } catch (error) {
       logMessage(`Error performing swap for wallet ${keypair.publicKey.toBase58()}: ${error.message}`);
     }
@@ -205,7 +207,7 @@ async function swapTokens(tempWallets, toToken, priorityFee, totalAmount) {
 
   for (const walletData of tempWallets) {
     swap(walletData);
-    await new Promise(resolve => setTimeout(resolve, Math.random() * 400 + 1600)); // Kick off a new transaction with a 1-second delay +/- 20%
+    await new Promise(resolve => setTimeout(resolve, Math.random() * 400 + 1600)); // Kick off a new transaction with a 1.6s delay +/- 20%
   }
 }
 
