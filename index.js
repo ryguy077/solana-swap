@@ -197,7 +197,7 @@ async function swapTokens(tempWallets, toToken, priorityFee, totalAmount) {
       logMessage(`Transaction URL: https://solscan.io/tx/${txid}`);
       await connection.confirmTransaction(txid, 'confirmed');
       logMessage(`Transaction confirmed: ${txid}`);
-      await new Promise(resolve => setTimeout(resolve, Math.random() * 2000 + 1000));
+      await new Promise(resolve => setTimeout(resolve, Math.random() * 2000 + 800));
     } catch (error) {
       logMessage(`Error performing swap for wallet ${keypair.publicKey.toBase58()}: ${error.message}`);
     }
@@ -205,7 +205,7 @@ async function swapTokens(tempWallets, toToken, priorityFee, totalAmount) {
 
   for (const walletData of tempWallets) {
     swap(walletData);
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Kick off a new transaction every second
+    await new Promise(resolve => setTimeout(resolve, Math.random() * 400 + 1600)); // Kick off a new transaction with a 1-second delay +/- 20%
   }
 }
 
