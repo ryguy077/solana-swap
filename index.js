@@ -158,10 +158,8 @@ async function recycleTempWallets(tempWallets, perWalletAmount) {
   return walletsWithBalance.slice(0, walletsWithBalance.length);  // Use the number of wallets needed
 }
 
-async function swapTokens(tempWallets, toToken, priorityFee, totalAmount) {
-  const amountToSwap = Number(totalAmount) / tempWallets.length;
-
-  const swap = async (walletData) => {
+async function swapTokens(tempWallets, toToken, priorityFee) {
+  const swap = async (walletData, amountToSwap) => {
     const keypair = Keypair.fromSecretKey(bs58.decode(walletData.secretKey));
     const solanaTracker = new SolanaTracker(keypair, 'https://rpc.solanatracker.io/public?advancedTx=true');
     const balance = await connection.getBalance(keypair.publicKey);
@@ -172,13 +170,11 @@ async function swapTokens(tempWallets, toToken, priorityFee, totalAmount) {
       return;
     }
 
-    const randomizedAmountToSwap = amountToSwap * (Math.random() * 0.4 + 0.8); // +/- 20% of amountToSwap
-
-    logMessage(`Swapping ${randomizedAmountToSwap.toFixed(4)} SOL from wallet ${keypair.publicKey.toBase58()}...`);
+    logMessage(`Swapping ${amountToSwap.toFixed(4)} SOL from wallet ${keypair.publicKey.toBase58()}...`);
     const swapResponse = await solanaTracker.getSwapInstructions(
       'So11111111111111111111111111111111111111112',
       toToken,
-      randomizedAmountToSwap,
+      amountToSwap,
       30,
       keypair.publicKey.toBase58(),
       priorityFee
@@ -206,7 +202,8 @@ async function swapTokens(tempWallets, toToken, priorityFee, totalAmount) {
   };
 
   for (const walletData of tempWallets) {
-    swap(walletData);
+    const amountToSwap = (Number(totalAmount) / tempWallets.length) * (Math.random() * 0.4 + 0.8); // +/- 20% of amountToSwap
+    swap(walletData, amountToSwap);
     await new Promise(resolve => setTimeout(resolve, Math.random() * 400 + 1600)); // Kick off a new transaction with a 1.6s delay +/- 20%
   }
 }
@@ -241,7 +238,7 @@ async function main() {
   }
 
   logMessage('Performing swaps...');
-  await swapTokens(allTempWallets, toToken, priorityFeeAmount, Number(totalAmount));
+  await swapTokens(allTempWallets, toToken, priorityFeeAmount);
 
   logMessage('Script completed successfully.');
 
