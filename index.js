@@ -104,7 +104,7 @@ async function getTransactionDetails() {
 async function distributeSol(fromKeypair, tempWallets, perWalletAmount, priorityFee) {
   logMessage(`Distributing SOL to temporary wallets...`);
 
-  for (const walletData of tempWallets) {
+  const distribute = async (walletData) => {
     try {
       const keypair = Keypair.fromSecretKey(bs58.decode(walletData.secretKey));
       const currentBalance = await connection.getBalance(keypair.publicKey) / LAMPORTS_PER_SOL;
@@ -132,6 +132,11 @@ async function distributeSol(fromKeypair, tempWallets, perWalletAmount, priority
     } catch (error) {
       logMessage(`Error processing wallet ${walletData.publicKey}: ${error.message}`);
     }
+  };
+
+  for (const walletData of tempWallets) {
+    distribute(walletData);
+    await new Promise(resolve => setTimeout(resolve, 1000)); // Kick off a new transaction every second
   }
 }
 
@@ -141,7 +146,7 @@ async function recycleTempWallets(tempWallets, perWalletAmount) {
   for (const wallet of tempWallets) {
     const keypair = Keypair.fromSecretKey(bs58.decode(wallet.secretKey));
     const balance = await connection.getBalance(keypair.publicKey) / LAMPORTS_PER_SOL;
-    if (balance > 0) {  // Recycle if there is any balance
+    if (balance > 0) {
       const amountNeeded = perWalletAmount - balance;
       walletsWithBalance.push({ publicKey: wallet.publicKey, secretKey: wallet.secretKey, balance, amountNeeded });
     }
@@ -150,13 +155,13 @@ async function recycleTempWallets(tempWallets, perWalletAmount) {
   walletsWithBalance.sort((a, b) => b.balance - a.balance);
 
   logMessage(`Recycled ${walletsWithBalance.length} wallets with sufficient balance.`);
-  return walletsWithBalance.slice(0, 5);  // Only take the top 5 wallets
+  return walletsWithBalance.slice(0, walletsWithBalance.length);  // Use the number of wallets needed
 }
 
 async function swapTokens(tempWallets, toToken, priorityFee, totalAmount) {
   const amountToSwap = Number(totalAmount) / tempWallets.length;
 
-  for (const walletData of tempWallets) {
+  const swap = async (walletData) => {
     const keypair = Keypair.fromSecretKey(bs58.decode(walletData.secretKey));
     const solanaTracker = new SolanaTracker(keypair, 'https://rpc.solanatracker.io/public?advancedTx=true');
     const balance = await connection.getBalance(keypair.publicKey);
@@ -164,7 +169,7 @@ async function swapTokens(tempWallets, toToken, priorityFee, totalAmount) {
 
     if (amount <= 0) {
       logMessage(`Skipping wallet ${keypair.publicKey.toBase58()} due to insufficient balance.`);
-      continue;
+      return;
     }
 
     logMessage(`Swapping ${amountToSwap.toFixed(4)} SOL from wallet ${keypair.publicKey.toBase58()}...`);
@@ -196,49 +201,55 @@ async function swapTokens(tempWallets, toToken, priorityFee, totalAmount) {
     } catch (error) {
       logMessage(`Error performing swap for wallet ${keypair.publicKey.toBase58()}: ${error.message}`);
     }
+  };
+
+  for (const walletData of tempWallets) {
+    swap(walletData);
+    await new Promise(resolve => setTimeout(resolve, 1000)); // Kick off a new transaction every second
   }
 }
 
 async function main() {
-    logMessage('Starting script...');
-    const walletData = await selectWallet();
-    const fromKeypair = Keypair.fromSecretKey(bs58.decode(walletData.secretKey));
-    const { totalAmount, numWallets, toToken, priorityFee } = await getTransactionDetails();
-    const priorityFeeAmount = Number(priorityFee);
-    const perWalletAmount = (Number(totalAmount) / numWallets) + 0.02;
+  logMessage('Starting script...');
+  
+  const walletData = await selectWallet();
+  const fromKeypair = Keypair.fromSecretKey(bs58.decode(walletData.secretKey));
+  const { totalAmount, numWallets, toToken, priorityFee } = await getTransactionDetails();
+  const priorityFeeAmount = Number(priorityFee);
+  const perWalletAmount = (Number(totalAmount) / numWallets) + 0.02;
 
-    const existingTempWallets = fs.existsSync(tempWalletsDir)
-        ? fs.readdirSync(tempWalletsDir).filter(file => file.endsWith('.json')).map(file => {
-            const walletFile = fs.readFileSync(path.join(tempWalletsDir, file));
-            const wallet = JSON.parse(walletFile);
-            return { publicKey: wallet.publicKey, secretKey: wallet.secretKey };
-        })
-        : [];
+  const existingTempWallets = fs.existsSync(tempWalletsDir)
+    ? fs.readdirSync(tempWalletsDir).filter(file => file.endsWith('.json')).map(file => {
+        const walletFile = fs.readFileSync(path.join(tempWalletsDir, file));
+        const wallet = JSON.parse(walletFile);
+        return { publicKey: wallet.publicKey, secretKey: wallet.secretKey };
+      })
+    : [];
 
-    const recycledWallets = await recycleTempWallets(existingTempWallets, perWalletAmount);
-    const newWalletsNeeded = numWallets - recycledWallets.length;
+  const recycledWallets = await recycleTempWallets(existingTempWallets, perWalletAmount);
+  const newWalletsNeeded = Math.max(0, numWallets - recycledWallets.length);
 
-    logMessage(`Recycling ${recycledWallets.length} existing temporary wallets...`);
-    const newTempWallets = newWalletsNeeded > 0 ? await createTempWallets(newWalletsNeeded, toToken) : [];
-    const allTempWallets = recycledWallets.concat(newTempWallets);
+  logMessage(`Recycling ${recycledWallets.length} existing temporary wallets...`);
+  const newTempWallets = newWalletsNeeded > 0 ? await createTempWallets(newWalletsNeeded, toToken) : [];
+  const allTempWallets = recycledWallets.concat(newTempWallets);
 
-    if (allTempWallets.length > 0) {
-        logMessage('Distributing SOL to temporary wallets...');
-        await distributeSol(fromKeypair, allTempWallets, perWalletAmount, priorityFeeAmount);
-    }
+  if (allTempWallets.length > 0) {
+    logMessage('Distributing SOL to temporary wallets...');
+    await distributeSol(fromKeypair, allTempWallets, perWalletAmount, priorityFeeAmount);
+  }
 
-    logMessage('Performing swaps...');
-    await swapTokens(allTempWallets, toToken, priorityFeeAmount, Number(totalAmount));
+  logMessage('Performing swaps...');
+  await swapTokens(allTempWallets, toToken, priorityFeeAmount, Number(totalAmount));
 
-    logMessage('Script completed successfully.');
+  logMessage('Script completed successfully.');
 
-    // Print details of wallets
-    logMessage('Wallet details:');
-    allTempWallets.forEach(walletData => {
-        logMessage(`Wallet: ${walletData.publicKey}, Balance: ${walletData.balance ? walletData.balance.toFixed(4) : '0.0000'} SOL, Amount Needed: ${walletData.amountNeeded ? walletData.amountNeeded.toFixed(4) : '0.0000'} SOL`);
-    });
+  // Print details of wallets
+  logMessage('Wallet details:');
+  allTempWallets.forEach(walletData => {
+    logMessage(`Wallet: ${walletData.publicKey}, Balance: ${walletData.balance ? walletData.balance.toFixed(4) : '0.0000'} SOL, Amount Needed: ${walletData.amountNeeded ? walletData.amountNeeded.toFixed(4) : '0.0000'} SOL`);
+  });
 }
 
 main().catch(error => {
-    logMessage(`Error: ${error.message}`);
+  logMessage(`Error: ${error.message}`);
 });
