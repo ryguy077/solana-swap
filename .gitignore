@@ -1,2 +1,4 @@
 node_modules
 wallets
+*.transaction_log.txt
+transaction_log.txt

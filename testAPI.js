@@ -14,7 +14,6 @@ const getAssetsWithNativeBalance = async () => {
                 params: {
                     ownerAddress: 'CieWgWEKEB1xmnYkJb2fGEn6ntMfeTvtHr4dL4nrZypr',
                     displayOptions: {
-                        showFungible: true,
                         showNativeBalance: true,
                     },
                 },
